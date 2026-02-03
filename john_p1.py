@@ -2,73 +2,141 @@ import sys
 sys.path.append("C:\\Program Files\\Webots\\lib\\controller\\python")
 from controller import Robot
 
+PI = 3.14159265
+
 robot = Robot()
-wheel1 = robot.getDevice("wheel1 motor")
-wheel2 = robot.getDevice("wheel2 motor")
-enc1 = robot.getDevice("wheel1 sensor")
-enc2 = robot.getDevice("wheel2 sensor")
-wheel1.setPosition(float("inf"))
-wheel2.setPosition(float("inf"))
-timeStep = 8
+timestep = int(robot.getBasicTimeStep())
 
-gps = robot.getDevice("gps")
-emitter = robot.getDevice("emitter")
-gyro = robot.getDevice("imu")
-cs = robot.getDevice("colour_sensor")
-lidar = robot.getDevice("lidar")
-receiver = robot.getDevice("receiver")
-camera1 = robot.getDevice("Rcam")
-camera2 = robot.getDevice("Lcam")
+# motor setup
+wheel_left = robot.getDevice('wheel1 motor')
+wheel_left.setPosition(float('inf'))
+wheel_right = robot.getDevice('wheel2 motor')
+wheel_right.setPosition(float('inf'))
 
-DM = robot.getDevice("DM")
-DR = robot.getDevice("DR")
-DL = robot.getDevice("DL")
-R45 = robot.getDevice("R45")
-L45 = robot.getDevice("L45")
+# wheel position sensors
+wheel_left_sensor = robot.getDevice('wheel1 sensor')
+wheel_left_sensor.enable(timestep)
+wheel_right_sensor = robot.getDevice('wheel2 sensor')
+wheel_right_sensor.enable(timestep)
 
-DM.enable(timeStep)
-DR.enable(timeStep)
-DL.enable(timeStep)
-R45.enable(timeStep)
-L45.enable(timeStep)
+# distance sensors
+distance_sensor1 = robot.getDevice('D1')
+distance_sensor1.enable(timestep)
+distance_sensor2 = robot.getDevice('D2')
+distance_sensor2.enable(timestep)
+distance_sensor3 = robot.getDevice('D3')
+distance_sensor3.enable(timestep)
+distance_sensor4 = robot.getDevice('D4')
+distance_sensor4.enable(timestep)
+distance_sensor5 = robot.getDevice('D5')
+distance_sensor5.enable(timestep)
+distance_sensor6 = robot.getDevice('D6')
+distance_sensor6.enable(timestep)
+distance_sensor7 = robot.getDevice('D7')
+distance_sensor7.enable(timestep)
+distance_sensor8 = robot.getDevice('D8')
+distance_sensor8.enable(timestep)
 
-gps.enable(timeStep)
-gyro.enable(timeStep)
-cs.enable(timeStep)
-enc1.enable(timeStep)
-enc2.enable(timeStep)
-lidar.enable(timeStep)
-camera1.enable(timeStep)
-camera2.enable(timeStep)
-receiver.enable(timeStep)
+# GPS and orientation sensors
+gps_sensor = robot.getDevice('gps')
+gps_sensor.enable(timestep)
 
-HOLE_THRESHOLD = 0.02
-WALL_THRESHOLD = 0.3
-CLOSE_WALL = 0.15
-TURN_SPEED = 3.0
-FORWARD_SPEED = 4.0
-BACKUP_SPEED = -2.0
+compass_sensor = robot.getDevice('inertial_unit')
+compass_sensor.enable(timestep)
 
-hole_timer = 0
-wall_timer = 0
-HOLE_TIME = 20
-WALL_TIME = 15
+emitter = robot.getDevice('emitter')
+emitter.setChannel(1)
+emitter.send('john'.encode('utf-8'))
 
-def print_sensors():
-    dm = int(DM.getValue() * 1000)
-    dr = int(DR.getValue() * 1000)
-    dl = int(DL.getValue() * 1000)
-    r45 = int(R45.getValue() * 1000)
-    l45 = int(L45.getValue() * 1000)
+# globals for sensor data
+prev_x, prev_z = 0, 0
+x, y, z = 0, 0, 0
+front_left, front_right, right_front, right_back, back_left, back_right, left_back, left_front = 0, 0, 0, 0, 0, 0, 0, 0
+roll, pitch, yaw = 0, 0, 0
+left_wheel_pos, right_wheel_pos = 0, 0
 
-    print("middle:", dm, "right:", dr, "left:", dl, "right45:", r45, "left45", l45)
+# 
+time = 0
+target_angle = 90
+start_time = 0
+stuck_time = 0
+unstuck_time = 0
+
+algorithm = "find_corner"
+state = "turn"
+state_next = "forward"
+turn_dir = ""
+
+def radToDegree(rad):
+    return rad * 180 / PI
+
+def setWheelVelocities(left_velocity, right_velocity):
+    left_velocity = left_velocity / 10 * 6.28
+    right_velocity = right_velocity / 10 * 6.28
+
+    wheel_left.setVelocity(left_velocity)
+    wheel_right.setVelocity(right_velocity)
+
+def readAllSensors():
+    global x, y, z, front_left, front_right, right_front, right_back, back_left, back_right, left_back, left_front
+    global roll, pitch, yaw, left_wheel_pos, right_wheel_pos
+
+    # GPS data
+    gps_values = gps_sensor.getValues()
+    x = gps_values[0] * 100 
+    y = gps_values[1] * 100
+    z = gps_values[2] * 100
+
+    # intertial unit data
+    compass_values = compass_sensor.getRollPitchYaw()
+    roll = radToDegree(compass_values[0])
+    pitch = radToDegree(compass_values[1])
+    yaw = radToDegree(compass_values[2])
+
+    # distance sensors
+    front_left = distance_sensor1.getValue() * 320
+    front_right = distance_sensor8.getValue() * 320
+    right_front = distance_sensor7.getValue() * 320
+    right_back = distance_sensor6.getValue() * 320
+    back_left = distance_sensor3.getValue() * 320
+    back_right = distance_sensor5.getValue() * 320
+    left_back = distance_sensor4.getValue() * 320
+    left_front = distance_sensor2.getValue() * 320
+
+    # wheel position sensors
+    left_wheel_pos = radToDegree(wheel_left_sensor.getValue())
+    right_wheel_pos = radToDegree(wheel_right_sensor.getValue())
+
+def printAllSensors():
+    print('=== POSITION & ORIENTATION ===')
+    print(f'Position - X: {x:.2f} cm, Y: {y:.2f} cm, Z: {z:.2f} cm')
+    print(f'Orientation - Roll: {roll:.2f}°, Pitch: {pitch:.2f}°, Yaw: {yaw:.2f}°')
+    
+    print('\n=== DISTANCE SENSORS ===')
+    print(f'Front left: {front_left:.2f}')
+    print(f'Front right: {front_right:.2f}')
+    print(f'Right front: {right_front:.2f}')
+    print(f'Right back: {right_back:.2f}')
+    print(f'Back left: {back_left:.2f}')
+    print(f'Back right: {back_right:.2f}')
+    print(f'Left back: {left_back:.2f}')
+    print(f'Left front: {left_front:.2f}')
+    
+    print('\n=== WHEEL POSITIONS ===')
+    print(f'Left wheel: {left_wheel_pos:.2f}°')
+    print(f'Right wheel: {right_wheel_pos:.2f}°')
+    print('-' * 50)
+
+HOLE_THRESHOLD = 100
+CLOSE_WALL = 20
+WALL_THRESHOLD = 30 
 
 def check_environment():
-    dm = DM.getValue()
-    dr = DR.getValue()
-    dl = DL.getValue()
-    r45 = R45.getValue()
-    l45 = L45.getValue()
+    dm = min(front_left, front_right)
+    dr = right_front
+    dl = left_front
+    r45 = right_front
+    l45 = left_front
     
     if dm > HOLE_THRESHOLD:
         return "hole", "middle", dm
@@ -94,60 +162,25 @@ def check_environment():
     
     return "clear", "none", 0
 
-# def handle_hazard(hazard_type, location, value):
-#     if hazard_type == "hole":
-#         print(f"Hole: {location}")
-#         if location == "middle":
-#             wheel1.setVelocity(BACKUP_SPEED)
-#             wheel2.setVelocity(BACKUP_SPEED)
-#             robot.step(timeStep * 5)
-#             wheel1.setVelocity(TURN_SPEED)
-#             wheel2.setVelocity(-TURN_SPEED)
-#         elif location == "left" or location == "left_diagonal":
-#             wheel1.setVelocity(TURN_SPEED)
-#             wheel2.setVelocity(TURN_SPEED * 0.3)
-#         elif location == "right" or location == "right_diagonal":
-#             wheel1.setVelocity(TURN_SPEED * 0.3)
-#             wheel2.setVelocity(TURN_SPEED)
-#     elif hazard_type == "wall":
-#         print(f"Wall: {location} - {value:.3f}")
-#         if location == "front":
-#             dl_val = DL.getValue()
-#             dr_val = DR.getValue()
-#             wheel1.setVelocity(BACKUP_SPEED)
-#             wheel2.setVelocity(BACKUP_SPEED)
-#             robot.step(timeStep * 3)
-#             if dl_val > dr_val:
-#                 wheel1.setVelocity(-TURN_SPEED)
-#                 wheel2.setVelocity(TURN_SPEED)
-#             else:
-#                 wheel1.setVelocity(TURN_SPEED)
-#                 wheel2.setVelocity(-TURN_SPEED)
-#         elif location == "left" or location == "left_diagonal":
-#             wheel1.setVelocity(TURN_SPEED)
-#             wheel2.setVelocity(TURN_SPEED * 0.5)
-#         elif location == "right" or location == "right_diagonal":
-#             wheel1.setVelocity(TURN_SPEED * 0.5)
-#             wheel2.setVelocity(TURN_SPEED)
+while robot.step(timestep) != -1:
+    readAllSensors()
+    printAllSensors()
 
-while robot.step(timeStep) != -1:
     if hole_timer > 0:
         hole_timer -= 1
     if wall_timer > 0:
         wall_timer -= 1
     
     hazard, location, value = check_environment()
-
-    print_sensors()
     
-    if hazard == "hole":
-        # handle_hazard(hazard, location, value)
-        # print("hole detected")
-        pass
-    elif hazard == "wall":
-        #handle_hazard(hazard, location, value)
-        # print("wall detected")
-        pass
+    # if hazard == "hole":
+    #     # handle_hazard(hazard, location, value)
+    #     # print("hole detected")
+    #     pass
+    # elif hazard == "wall":
+    #     #handle_hazard(hazard, location, value)
+    #     # print("wall detected")
+    #     pass
     
-    wheel1.setVelocity(0)
-    wheel2.setVelocity(0)
+    wheel_left.setVelocity(0)
+wheel_right.setVelocity(0)
