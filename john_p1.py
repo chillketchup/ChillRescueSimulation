@@ -19,7 +19,7 @@ wheel_left_sensor.enable(timestep)
 wheel_right_sensor = robot.getDevice('wheel2 sensor')
 wheel_right_sensor.enable(timestep)
 
-# distance sensors - using your specific sensor names
+# distance sensors
 DM = robot.getDevice('DM')
 DM.enable(timestep)
 DR = robot.getDevice('DR')
@@ -53,7 +53,7 @@ x, y, z = 0, 0, 0
 roll, pitch, yaw = 0, 0, 0
 left_wheel_pos, right_wheel_pos = 0, 0
 
-# Sensor values (now using your specific sensors)
+# Sensor values
 dm_value, dr_value, dl_value, r45_value, l45_value = 0, 0, 0, 0, 0
 
 # Timers and state variables
@@ -62,8 +62,8 @@ target_angle = 90
 start_time = 0
 stuck_time = 0
 unstuck_time = 0
-hole_timer = 0  # Added missing variable
-wall_timer = 0  # Added missing variable
+hole_timer = 0
+wall_timer = 0
 
 algorithm = "find_corner"
 state = "turn"
