@@ -1,172 +1,156 @@
 import sys
+import math
 sys.path.append("C:\\Program Files\\Webots\\lib\\controller\\python")
 from controller import Robot
 
 PI = 3.14159265
 
-robot = Robot()
-timestep = int(robot.getBasicTimeStep())
-
-# motor setup
-wheel_left = robot.getDevice('wheel1 motor')
-wheel_left.setPosition(float('inf'))
-wheel_right = robot.getDevice('wheel2 motor')
-wheel_right.setPosition(float('inf'))
-
-# wheel position sensors
-wheel_left_sensor = robot.getDevice('wheel1 sensor')
-wheel_left_sensor.enable(timestep)
-wheel_right_sensor = robot.getDevice('wheel2 sensor')
-wheel_right_sensor.enable(timestep)
-
-# distance sensors
-DM = robot.getDevice('DM')
-DM.enable(timestep)
-DR = robot.getDevice('DR')
-DR.enable(timestep)
-DL = robot.getDevice('DL')
-DL.enable(timestep)
-R45 = robot.getDevice('R45')
-R45.enable(timestep)
-L45 = robot.getDevice('L45')
-L45.enable(timestep)
-
-# GPS and orientation sensors
-gps_sensor = robot.getDevice('gps')
-gps_sensor.enable(timestep)
-
-compass_sensor = robot.getDevice('inertial_unit')
-compass_sensor.enable(timestep)
-
-emitter = robot.getDevice('emitter')
-emitter.setChannel(1)
-emitter.send('john'.encode('utf-8'))
-
-# Define thresholds
-HOLE_THRESHOLD = 100
-CLOSE_WALL = 20
-WALL_THRESHOLD = 30
-
-# globals for sensor data
-prev_x, prev_z = 0, 0
-x, y, z = 0, 0, 0
-roll, pitch, yaw = 0, 0, 0
-left_wheel_pos, right_wheel_pos = 0, 0
-
-# Sensor values
-dm_value, dr_value, dl_value, r45_value, l45_value = 0, 0, 0, 0, 0
-
-# Timers and state variables
-time = 0
-target_angle = 90
-start_time = 0
-stuck_time = 0
-unstuck_time = 0
-hole_timer = 0
-wall_timer = 0
-
-algorithm = "find_corner"
-state = "turn"
-state_next = "forward"
-turn_dir = ""
-
-def radToDegree(rad):
-    return rad * 180 / PI
-
-def setWheelVelocities(left_velocity, right_velocity):
-    left_velocity = left_velocity / 10 * 6.28
-    right_velocity = right_velocity / 10 * 6.28
-
-    wheel_left.setVelocity(left_velocity)
-    wheel_right.setVelocity(right_velocity)
-
-def readAllSensors():
-    global x, y, z, roll, pitch, yaw, left_wheel_pos, right_wheel_pos
-    global dm_value, dr_value, dl_value, r45_value, l45_value
-
-    # GPS data
-    gps_values = gps_sensor.getValues()
-    x = gps_values[0] * 100 
-    y = gps_values[1] * 100
-    z = gps_values[2] * 100
-
-    # inertial unit data
-    compass_values = compass_sensor.getRollPitchYaw()
-    roll = radToDegree(compass_values[0])
-    pitch = radToDegree(compass_values[1])
-    yaw = radToDegree(compass_values[2])
-
-    # distance sensors
-    dm_value = DM.getValue() * 320 
-    dr_value = DR.getValue() * 320
-    dl_value = DL.getValue() * 320
-    r45_value = R45.getValue() * 320
-    l45_value = L45.getValue() * 320
-
-    # wheel position sensors
-    left_wheel_pos = radToDegree(wheel_left_sensor.getValue())
-    right_wheel_pos = radToDegree(wheel_right_sensor.getValue())
-
-def printAllSensors():
-    print('=== POSITION & ORIENTATION ===')
-    print(f'Position - X: {x:.2f} cm, Y: {y:.2f} cm, Z: {z:.2f} cm')
-    print(f'Orientation - Roll: {roll:.2f}°, Pitch: {pitch:.2f}°, Yaw: {yaw:.2f}°')
+class RobotController:
+    def __init__(self):
+        self.robot = Robot()
+        self.timestep = int(self.robot.getBasicTimeStep())
+        
+        self._initialize_motors()
+        self._initialize_sensors()
+        
+        self.position = {'x': 0, 'y': 0, 'z': 0}
+        self.orientation = {'roll': 0, 'pitch': 0, 'yaw': 0}
+        self.distances = {
+            'dm': 0,  # middle
+            'dr': 0,  # right
+            'dl': 0,  # left
+            'r45': 0,  # right diagonal
+            'l45': 0   # left diagonal
+        }
+        self.wheel_positions = {'left': 0, 'right': 0}
+        
+    def _initialize_motors(self):
+        self.wheel_left = self.robot.getDevice('wheel1 motor')
+        self.wheel_left.setPosition(float('inf'))
+        self.wheel_right = self.robot.getDevice('wheel2 motor')
+        self.wheel_right.setPosition(float('inf'))
     
-    print('\n=== DISTANCE SENSORS ===')
-    print(f'DM (middle): {dm_value:.2f}')
-    print(f'DR (right): {dr_value:.2f}')
-    print(f'DL (left): {dl_value:.2f}')
-    print(f'R45 (right diagonal): {r45_value:.2f}')
-    print(f'L45 (left diagonal): {l45_value:.2f}')
+    def _initialize_sensors(self):
+        self.dm_sensor = self.robot.getDevice('DM')
+        self.dm_sensor.enable(self.timestep)
+        
+        self.dr_sensor = self.robot.getDevice('DR')
+        self.dr_sensor.enable(self.timestep)
+        
+        self.dl_sensor = self.robot.getDevice('DL')
+        self.dl_sensor.enable(self.timestep)
+        
+        self.r45_sensor = self.robot.getDevice('R45')
+        self.r45_sensor.enable(self.timestep)
+        
+        self.l45_sensor = self.robot.getDevice('L45')
+        self.l45_sensor.enable(self.timestep)
     
-    print('\n=== WHEEL POSITIONS ===')
-    print(f'Left wheel: {left_wheel_pos:.2f}°')
-    print(f'Right wheel: {right_wheel_pos:.2f}°')
-    print('-' * 50)
+        self.wheel_left_sensor = self.robot.getDevice('wheel1 sensor')
+        self.wheel_left_sensor.enable(self.timestep)
+        
+        self.wheel_right_sensor = self.robot.getDevice('wheel2 sensor')
+        self.wheel_right_sensor.enable(self.timestep)
+    
+        self.gps_sensor = self.robot.getDevice('gps')
+        self.gps_sensor.enable(self.timestep)
+        
+        self.compass_sensor = self.robot.getDevice('imu')
+        self.compass_sensor.enable(self.timestep)
+    
+    def set_wheel_velocities(self, left_velocity, right_velocity):
+        left_velocity = left_velocity / 10 * 6.28
+        right_velocity = right_velocity / 10 * 6.28
+        
+        self.wheel_left.setVelocity(left_velocity)
+        self.wheel_right.setVelocity(right_velocity)
+    
+    def stop_motors(self):
+        self.wheel_left.setVelocity(0)
+        self.wheel_right.setVelocity(0)
+    
+    def read_all_sensors(self):
+        gps_values = self.gps_sensor.getValues()
+        self.position['x'] = gps_values[0] * 100
+        self.position['y'] = gps_values[1] * 100
+        self.position['z'] = gps_values[2] * 100
+        
+        compass_values = self.compass_sensor.getRollPitchYaw()
+        self.orientation['roll'] = math.degrees(compass_values[0])
+        self.orientation['pitch'] = math.degrees(compass_values[1])
+        self.orientation['yaw'] = math.degrees(compass_values[2])
+        
+        self.distances['dm'] = self.dm_sensor.getValue() * 320
+        self.distances['dr'] = self.dr_sensor.getValue() * 320
+        self.distances['dl'] = self.dl_sensor.getValue() * 320
+        self.distances['r45'] = self.r45_sensor.getValue() * 320
+        self.distances['l45'] = self.l45_sensor.getValue() * 320
+        
+        self.wheel_positions['left'] = math.degrees(self.wheel_left_sensor.getValue())
+        self.wheel_positions['right'] = math.degrees(self.wheel_right_sensor.getValue())
+    
+    def print_sensor_data(self):
+        print('=== POSITION & ORIENTATION ===')
+        print(f"Position - X: {self.position['x']:.2f} cm, Y: {self.position['y']:.2f} cm, Z: {self.position['z']:.2f} cm")
+        print(f"Orientation - Roll: {self.orientation['roll']:.2f}°, Pitch: {self.orientation['pitch']:.2f}°, Yaw: {self.orientation['yaw']:.2f}°")
+        
+        print('\n=== DISTANCE SENSORS ===')
+        print(f"DM (middle): {self.distances['dm']:.2f}")
+        print(f"DR (right): {self.distances['dr']:.2f}")
+        print(f"DL (left): {self.distances['dl']:.2f}")
+        print(f"R45 (right diagonal): {self.distances['r45']:.2f}")
+        print(f"L45 (left diagonal): {self.distances['l45']:.2f}")
+        
+        print('\n=== WHEEL POSITIONS ===')
+        print(f"Left wheel: {self.wheel_positions['left']:.2f}°")
+        print(f"Right wheel: {self.wheel_positions['right']:.2f}°")
+        print('-' * 50)
+    
+    # def check_environment(self):
+    #     dm = self.distances['dm']
+    #     dl = self.distances['dl']
+    #     dr = self.distances['dr']
+    #     r45 = self.distances['r45']
+    #     l45 = self.distances['l45']
+        
+    #     # Check for holes (high distance values)
+    #     if dm > HOLE_THRESHOLD:
+    #         return "hole", "middle", dm
+    #     if dl > HOLE_THRESHOLD:
+    #         return "hole", "left", dl
+    #     if dr > HOLE_THRESHOLD:
+    #         return "hole", "right", dr
+    #     if r45 > HOLE_THRESHOLD:
+    #         return "hole", "right_diagonal", r45
+    #     if l45 > HOLE_THRESHOLD:
+    #         return "hole", "left_diagonal", l45
+        
+    #     # Check for walls (low distance values)
+    #     if dm < CLOSE_WALL:
+    #         return "wall", "front", dm
+    #     if dl < CLOSE_WALL:
+    #         return "wall", "left", dl
+    #     if dr < CLOSE_WALL:
+    #         return "wall", "right", dr
+    #     if l45 < WALL_THRESHOLD:
+    #         return "wall", "left_diagonal", l45
+    #     if r45 < WALL_THRESHOLD:
+    #         return "wall", "right_diagonal", r45
+        
+    #     return "clear", "none", 0
+    
+    def run(self):
+        """Main control loop"""
+        while self.robot.step(self.timestep) != -1:
+            self.read_all_sensors()
+            self.print_sensor_data()
+            
+            # if hazard == "hole":
+            #     self.handle_hole(location, value)
+            # elif hazard == "wall":
+            #     self.handle_wall(location, value)
+            
+            self.stop_motors()
 
-def check_environment():
-    if dm_value > HOLE_THRESHOLD:
-        return "hole", "middle", dm_value
-    if dl_value > HOLE_THRESHOLD:
-        return "hole", "left", dl_value
-    if dr_value > HOLE_THRESHOLD:
-        return "hole", "right", dr_value
-    if r45_value > HOLE_THRESHOLD:
-        return "hole", "right_diagonal", r45_value
-    if l45_value > HOLE_THRESHOLD:
-        return "hole", "left_diagonal", l45_value
-    
-    if dm_value < CLOSE_WALL:
-        return "wall", "front", dm_value
-    if dl_value < CLOSE_WALL:
-        return "wall", "left", dl_value
-    if dr_value < CLOSE_WALL:
-        return "wall", "right", dr_value
-    if l45_value < WALL_THRESHOLD:
-        return "wall", "left_diagonal", l45_value
-    if r45_value < WALL_THRESHOLD:
-        return "wall", "right_diagonal", r45_value
-    
-    return "clear", "none", 0
-
-# Main loop
-while robot.step(timestep) != -1:
-    readAllSensors()
-    printAllSensors()
-
-    if hole_timer > 0:
-        hole_timer -= 1
-    if wall_timer > 0:
-        wall_timer -= 1
-    
-    hazard, location, value = check_environment()
-    
-    # if hazard == "hole":
-    #     # handle_hazard(hazard, location, value)
-    #     print(f"Hole detected: {location} with value {value}")
-    # elif hazard == "wall":
-    #     # handle_hazard(hazard, location, value)
-    #     print(f"Wall detected: {location} with value {value}")
-    
-    wheel_left.setVelocity(0)
-    wheel_right.setVelocity(0)
+controller = RobotController()
+controller.run()
