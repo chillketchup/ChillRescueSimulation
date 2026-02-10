@@ -24,6 +24,9 @@ class RobotController:
         }
         self.wheel_positions = {'left': 0, 'right': 0}
         
+        self.last_error = 0
+        self.I = 0 
+        
     def _initialize_motors(self):
         self.wheel_left = self.robot.getDevice('wheel1 motor')
         self.wheel_left.setPosition(float('inf'))
@@ -106,51 +109,45 @@ class RobotController:
         print(f"Right wheel: {self.wheel_positions['right']:.2f}°")
         print('-' * 50)
     
-    # def check_environment(self):
-    #     dm = self.distances['dm']
-    #     dl = self.distances['dl']
-    #     dr = self.distances['dr']
-    #     r45 = self.distances['r45']
-    #     l45 = self.distances['l45']
+    def set_orientation(self, target_angle):
+        current_yaw = self.orientation['yaw']
+        error = current_yaw - target_angle
         
-    #     # Check for holes (high distance values)
-    #     if dm > HOLE_THRESHOLD:
-    #         return "hole", "middle", dm
-    #     if dl > HOLE_THRESHOLD:
-    #         return "hole", "left", dl
-    #     if dr > HOLE_THRESHOLD:
-    #         return "hole", "right", dr
-    #     if r45 > HOLE_THRESHOLD:
-    #         return "hole", "right_diagonal", r45
-    #     if l45 > HOLE_THRESHOLD:
-    #         return "hole", "left_diagonal", l45
+        if error > 180:
+            error -= 360
+        elif error < -180:
+            error += 360
         
-    #     # Check for walls (low distance values)
-    #     if dm < CLOSE_WALL:
-    #         return "wall", "front", dm
-    #     if dl < CLOSE_WALL:
-    #         return "wall", "left", dl
-    #     if dr < CLOSE_WALL:
-    #         return "wall", "right", dr
-    #     if l45 < WALL_THRESHOLD:
-    #         return "wall", "left_diagonal", l45
-    #     if r45 < WALL_THRESHOLD:
-    #         return "wall", "right_diagonal", r45
+        Kp = 0.2
+        Ki = 0.001
+        Kd = 0.05
         
-    #     return "clear", "none", 0
+        P = Kp * error
+        
+        if abs(error) < 30:
+            self.I += error * Ki
+        else:
+            self.I = 0
+        
+        D = Kd * (error - self.last_error)
+        self.last_error = error
+        
+        speed = P + self.I + D
+        
+        if abs(error) <= 0.1:
+            speed = 0
+            self.I = 0
+        
+        self.set_wheel_velocities(-speed, speed)
     
     def run(self):
-        """Main control loop"""
+        target_angle = 90
+        
         while self.robot.step(self.timestep) != -1:
             self.read_all_sensors()
             self.print_sensor_data()
             
-            # if hazard == "hole":
-            #     self.handle_hole(location, value)
-            # elif hazard == "wall":
-            #     self.handle_wall(location, value)
-            
-            self.stop_motors()
+            reached = self.set_orientation(target_angle)
 
 controller = RobotController()
 controller.run()
