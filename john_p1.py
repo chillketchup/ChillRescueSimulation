@@ -81,7 +81,7 @@ class RobotController:
         compass_values = self.compass_sensor.getRollPitchYaw()
         self.orientation['roll'] = math.degrees(compass_values[0])
         self.orientation['pitch'] = math.degrees(compass_values[1])
-        self.orientation['yaw'] = math.degrees(compass_values[2])
+        self.orientation['yaw'] = math.degrees(compass_values[2]) + 180
         
         self.distances['dm'] = self.dm_sensor.getValue() * 320
         self.distances['dr'] = self.dr_sensor.getValue() * 320
@@ -113,32 +113,21 @@ class RobotController:
         current_yaw = self.orientation['yaw']
         error = current_yaw - target_angle
         
-        if error > 180:
+        if error > 360:
             error -= 360
-        elif error < -180:
+        elif error < 0:
             error += 360
         
-        Kp = 0.2
-        Ki = 0.001
-        Kd = 0.05
-        
-        P = Kp * error
-        
-        if abs(error) < 30:
-            self.I += error * Ki
-        else:
-            self.I = 0
-        
-        D = Kd * (error - self.last_error)
-        self.last_error = error
-        
-        speed = P + self.I + D
+        P = 0.2
+
+        speed = P * error
         
         if abs(error) <= 0.1:
             speed = 0
-            self.I = 0
         
         self.set_wheel_velocities(-speed, speed)
+
+        return abs(error) <= 0.1
     
     def run(self):
         target_angle = 90
@@ -148,6 +137,9 @@ class RobotController:
             self.print_sensor_data()
             
             reached = self.set_orientation(target_angle)
+            print(reached)
+            
+
 
 controller = RobotController()
 controller.run()
