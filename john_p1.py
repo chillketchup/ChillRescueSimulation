@@ -73,6 +73,15 @@ class RobotController:
         
         return {'x': tile_x, 'z': tile_z}
     
+    def calculate_target_angle_distance(self, target_x, target_z):
+        difference_x = target_x - self.position['x']
+        difference_z = target_z - self.position['z']
+
+        angle = math.degrees(math.atan2(difference_z, difference_x))
+        distance = math.sqrt(math.pow(difference_x, 2) + math.pow(difference_z, 2))
+
+        return (angle, distance)
+    
     def set_wheel_velocities(self, left_velocity, right_velocity):
         left_velocity = left_velocity / 10 * 6.28
         right_velocity = right_velocity / 10 * 6.28
@@ -154,6 +163,10 @@ class RobotController:
             self.print_sensor_data()
             self.wheel_left.setVelocity(0)
             self.wheel_right.setVelocity(0)
+
+            angle, distance = self.calculate_target_angle_distance(-60, -30)
+            print(f"angle: {angle:.2f}, distance: {distance:.2f}")
+
             
             #self.set_orientation(target_angle)
             
