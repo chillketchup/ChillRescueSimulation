@@ -6,6 +6,10 @@ from controller import Robot
 PI = 3.14159265
 
 class RobotController:
+    TILE_SIZE = 11
+    ORIGIN_X = -66
+    ORIGIN_Z = 24
+    
     def __init__(self):
         self.robot = Robot()
         self.timestep = int(self.robot.getBasicTimeStep())
@@ -61,6 +65,15 @@ class RobotController:
         self.compass_sensor = self.robot.getDevice('imu')
         self.compass_sensor.enable(self.timestep)
     
+    def calculate_current_tile(self):
+        relative_x = abs(self.position['x'] - self.ORIGIN_X)
+        relative_z = abs(self.position['z'] - self.ORIGIN_Z)
+        
+        tile_x = math.floor(relative_x / self.TILE_SIZE * 2) / 2 + 0.5
+        tile_z = math.floor(relative_z / self.TILE_SIZE * 2) / 2 + 0.5
+        
+        return (tile_x, tile_z)
+    
     def set_wheel_velocities(self, left_velocity, right_velocity):
         left_velocity = left_velocity / 10 * 6.28
         right_velocity = right_velocity / 10 * 6.28
@@ -96,6 +109,10 @@ class RobotController:
         print('=== POSITION & ORIENTATION ===')
         print(f"Position - X: {self.position['x']:.2f} cm, Y: {self.position['y']:.2f} cm, Z: {self.position['z']:.2f} cm")
         print(f"Orientation - Roll: {self.orientation['roll']:.2f}°, Pitch: {self.orientation['pitch']:.2f}°, Yaw: {self.orientation['yaw']:.2f}°")
+        
+        current_tile = self.calculate_current_tile()
+        print(f"\n=== TILE INFORMATION ===")
+        print(f"Current tile: ({current_tile[0]}, {current_tile[1]})")
         
         print('\n=== DISTANCE SENSORS ===')
         print(f"DM (middle): {self.distances['dm']:.2f}")
@@ -137,8 +154,11 @@ class RobotController:
             self.print_sensor_data()
             
             reached = self.set_orientation(target_angle)
-            print(reached)
+            print(f"Orientation reached: {reached}")
             
+            current_tile = self.calculate_current_tile()
+            if current_tile == (2, 2):
+                print("Robot is at tile (2, 2)!")
 
 
 controller = RobotController()
