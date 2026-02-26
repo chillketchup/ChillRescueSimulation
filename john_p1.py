@@ -27,9 +27,8 @@ class RobotController:
             'l45': 0   # left diagonal
         }
         self.wheel_positions = {'left': 0, 'right': 0}
-        
-        self.last_error = 0
-        self.I = 0 
+
+        self.current_tile = {'x': 0, 'z': 0}
         
     def _initialize_motors(self):
         self.wheel_left = self.robot.getDevice('wheel1 motor')
@@ -72,7 +71,7 @@ class RobotController:
         tile_x = math.floor(relative_x / self.TILE_SIZE * 2) / 2 + 0.5
         tile_z = math.floor(relative_z / self.TILE_SIZE * 2) / 2 + 0.5
         
-        return (tile_x, tile_z)
+        return {'x': tile_x, 'z': tile_z}
     
     def set_wheel_velocities(self, left_velocity, right_velocity):
         left_velocity = left_velocity / 10 * 6.28
@@ -90,6 +89,8 @@ class RobotController:
         self.position['x'] = gps_values[0] * 100
         self.position['y'] = gps_values[1] * 100
         self.position['z'] = gps_values[2] * 100
+
+        self.current_tile = self.calculate_current_tile()
         
         compass_values = self.compass_sensor.getRollPitchYaw()
         self.orientation['roll'] = math.degrees(compass_values[0])
@@ -111,7 +112,7 @@ class RobotController:
         print(f"Orientation - Roll: {self.orientation['roll']:.2f}°, Pitch: {self.orientation['pitch']:.2f}°, Yaw: {self.orientation['yaw']:.2f}°")
         
         print(f"\n=== TILE INFORMATION ===")
-        print(f"Current tile: ({current_tile[0]}, {current_tile[1]})")
+        print(f"Current tile: ({self.current_tile['x']}, {self.current_tile['z']})")
         
         print('\n=== DISTANCE SENSORS ===')
         print(f"DM (middle): {self.distances['dm']:.2f}")
@@ -151,9 +152,12 @@ class RobotController:
         while self.robot.step(self.timestep) != -1:
             self.read_all_sensors()
             self.print_sensor_data()
+            self.wheel_left.setVelocity(0)
+            self.wheel_right.setVelocity(0)
             
             #self.set_orientation(target_angle)
             
+
 
 controller = RobotController()
 controller.run()
