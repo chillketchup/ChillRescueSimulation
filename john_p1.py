@@ -110,7 +110,6 @@ class RobotController:
         print(f"Position - X: {self.position['x']:.2f} cm, Y: {self.position['y']:.2f} cm, Z: {self.position['z']:.2f} cm")
         print(f"Orientation - Roll: {self.orientation['roll']:.2f}°, Pitch: {self.orientation['pitch']:.2f}°, Yaw: {self.orientation['yaw']:.2f}°")
         
-        current_tile = self.calculate_current_tile()
         print(f"\n=== TILE INFORMATION ===")
         print(f"Current tile: ({current_tile[0]}, {current_tile[1]})")
         
@@ -147,19 +146,14 @@ class RobotController:
         return abs(error) <= 0.1
     
     def run(self):
-        target_angle = 90
+        #target_angle = 90
         
         while self.robot.step(self.timestep) != -1:
             self.read_all_sensors()
             self.print_sensor_data()
             
-            reached = self.set_orientation(target_angle)
-            print(f"Orientation reached: {reached}")
+            #self.set_orientation(target_angle)
             
-            current_tile = self.calculate_current_tile()
-            if current_tile == (2, 2):
-                print("Robot is at tile (2, 2)!")
-
 
 controller = RobotController()
 controller.run()
