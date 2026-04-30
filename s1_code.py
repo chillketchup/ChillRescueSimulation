@@ -24,6 +24,7 @@ compass.enable(timestep)
 gps = robot.getDevice("gps")
 gps.enable(timestep)
 
+max_velocity = 100
 x = 0
 y = 0
 
@@ -42,9 +43,10 @@ def set_orientation(target_angle):
         elif error < 0:
             error += 360
         
-        speed = error
+        speed = max(error, 10)
+        speed = min(speed, max_velocity)
         
-        if abs(error) <= 0.1:
+        if abs(error) <= 1:
             set_wheel_velocities(0, 0)
             return
         
@@ -90,17 +92,17 @@ def dir():
 
     return dir_value
 
-def dist(dir):
+def dist(direction):
     rangeImage = lidar.getRangeImage()
 
-    if dir == "front":
+    if direction == "front":
         return rangeImage[1024] * 1000
-    elif dir == "left":
+    elif direction == "left":
         return rangeImage[1438] * 1000
-    elif dir == "right":
+    elif direction == "right":
         return rangeImage[1152] * 1000
-    elif dir == "back":
-        return rangeImage[1280] * 1000
+    elif direction == "back":
+        return rangeImage[1310] * 1000
   
 TURN_90 = 325
 MOVETILE = 925
@@ -146,17 +148,17 @@ def forward():
 def turn(direction):
     current = dir_snap[dir()-1]
 
-    if dir == "left":
+    if direction == "left":
         angle = current - 90
-    elif dir == "left45":
+    elif direction == "left45":
         angle = current - 45
-    elif dir == "right45":
+    elif direction == "right45":
         angle = current + 45
-    elif dir == "right":
+    elif direction == "right":
         angle = current + 90
-    elif dir == "right135":
+    elif direction == "right135":
         angle = current + 135
-    elif dir == "back":
+    elif direction == "back":
         angle = current + 180
     else:
         angle = current - 135
@@ -184,25 +186,16 @@ def print_data():
     print(f"back: {dist('back'):.2f}")
 
 while robot.step(timestep) != -1:
-    forward()
-    turn("left")
-    forward()
     
-    # if front_distance > WALL_THRESHOLD:
-    #     set_wheel_velocities(100, 100)
-    # else:
-    #     set_wheel_velocities(0, 0)
+    if dist('front') > WALL_THRESHOLD:
+        forward()
+    else:
+        left_distance = dist("left")
+        right_distance = dist("right")
         
-    #     left_distance = dist("left")
-    #     right_distance = dist("right")
-        
-    #     if left_distance > right_distance:
-    #         turn("left")
-    #     else:
-    #         turn("right")
+        if left_distance > right_distance:
+            turn("left")
+        else:
+            turn("right")
 
-    #     print("turned")
-        
-    #     set_wheel_velocities(0, 0)
-
-    break
+    robot.step(10)
